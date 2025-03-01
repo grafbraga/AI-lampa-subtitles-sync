@@ -2,7 +2,7 @@
 // Name: Subtitles Sync AI
 // Description: Plugin for auto-generating subtitles using Web Speech API
 // Version: 1.1.16
-// Author: grafbraga & Grok3-xAI
+// Author: grafbraga
 // ==/LampaPlugin==
 
 (function () {
