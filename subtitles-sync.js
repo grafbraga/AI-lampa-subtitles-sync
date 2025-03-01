@@ -1,8 +1,8 @@
 // ==LampaPlugin==
 // Name: Subtitles Sync AI
 // Description: Plugin for auto-generating subtitles using Web Speech API
-// Version: 1.1.15
-// Author: grafbraga
+// Version: 1.1.16
+// Author: grafbraga & Grok3-xAI
 // ==/LampaPlugin==
 
 (function () {
@@ -15,7 +15,7 @@
 
     var SubtitlesSyncAI = {
         name: 'SubtitlesSyncAI',
-        version: '1.1.15',
+        version: '1.1.16',
         recognition: null,
         subtitles: [],
         languages: ['en-US', 'ru-RU', 'es-ES', 'fr-FR', 'de-DE'],
@@ -36,6 +36,7 @@
                     for (var i = event.resultIndex; i < event.results.length; i++) {
                         if (event.results[i].isFinal) {
                             var transcript = event.results[i][0].transcript;
+                            console.log('Recognized text:', transcript);
                             _this.addSubtitle(transcript);
                         }
                     }
@@ -61,7 +62,7 @@
                 if (e.type === 'ready') {
                     setTimeout(function () {
                         console.log('App ready, setting up plugin');
-                        if (Lampa.Noty) Lampa.Noty.show('Subtitles Sync AI v1.1.15 loaded');
+                        if (Lampa.Noty) Lampa.Noty.show('Subtitles Sync AI v1.1.16 loaded');
                         _this.addSettings();
                         _this.setupPlayer();
                     }, 500);
@@ -162,9 +163,10 @@
             var player = Lampa.Player;
             var currentTime;
 
-            // Проверка доступа к player.time()
+            // Проверка доступности player.time()
             if (player && typeof player.time === 'function') {
                 currentTime = player.time();
+                console.log('Current playback time:', currentTime);
             } else {
                 console.error('Player time unavailable');
                 currentTime = 0; // Fallback значение
