@@ -1,7 +1,7 @@
 // ==LampaPlugin==
 // Name: Subtitles Sync AI
 // Description: Plugin for auto-generating subtitles using Web Speech API
-// Version: 1.1.21
+// Version: 1.1.30
 // Author: grafbraga
 // ==/LampaPlugin==
 
@@ -12,13 +12,12 @@
 
     var SubtitlesSyncAI = {
         name: 'SubtitlesSyncAI',
-        version: '1.1.21',
+        version: '1.1.3',
         recognition: null,
         subtitles: [],
         languages: ['en-US', 'ru-RU', 'es-ES', 'fr-FR', 'de-DE'],
         selectedLang: 'en-US',
         active: false,
-        subtitleElement: null,
 
         init: function () {
             var _this = this;
@@ -69,6 +68,7 @@
                 };
             } else {
                 console.log('Web Speech API не поддерживается в этом браузере');
+                Lampa.Noty.show('Web Speech API не поддерживается в этом браузере');
                 return;
             }
 
@@ -78,7 +78,6 @@
                     setTimeout(function () {
                         _this.addSettings();
                         _this.setupPlayer();
-                        _this.createSubtitleElement();
                     }, 500);
                 }
             });
@@ -87,27 +86,61 @@
         addSettings: function () {
             var _this = this;
 
-            Lampa.Settings.add('subtitles_sync_ai', {
-                name: 'Subtitles Sync AI',
-                index: -1, // Для верхнего положения в меню
-                items: [
-                    {
+            // Добавляем в корневое меню настроек
+            if (Lampa.Settings) {
+                Lampa.Settings.add({
+                    component: 'subtitles_sync_ai',
+                    name: 'AI Субтитры',
+                    icon: 'subtitles',
+                    items: [
+                        {
+                            name: 'Выбор языка',
+                            subtitle: 'Язык распознавания речи для субтитров',
+                            selected: function() {
+                                return _this.selectedLang.split('-')[0].toUpperCase();
+                            },
+                            popup: [{
+                                title: 'Выберите язык',
+                                items: _this.languages.map(function(lang) {
+                                    return {
+                                        title: lang.split('-')[0].toUpperCase(),
+                                        value: lang,
+                                        selected: _this.selectedLang === lang
+                                    };
+                                }),
+                                onSelect: function(item) {
+                                    _this.selectedLang = item.value;
+                                    Lampa.Storage.set('subtitles_sync_ai_lang', item.value);
+                                    if (_this.recognition) _this.recognition.lang = item.value;
+                                    Lampa.Noty.show('Выбран язык: ' + item.title);
+                                }
+                            }]
+                        }
+                    ]
+                });
+            }
+
+            // Для совместимости добавляем также через SettingsApi
+            if (Lampa.SettingsApi) {
+                Lampa.SettingsApi.addParam({
+                    component: 'interface',
+                    param: {
                         name: 'subtitles_sync_ai_lang',
                         type: 'select',
                         values: this.languages.reduce(function (result, lang) {
                             result[lang] = lang.split('-')[0].toUpperCase();
                             return result;
                         }, {}),
-                        default: this.selectedLang,
-                        title: 'Язык субтитров AI',
-                        onChange: function (value) {
-                            _this.selectedLang = value;
-                            Lampa.Storage.set('subtitles_sync_ai_lang', value);
-                            if (_this.recognition) _this.recognition.lang = value;
-                        }
+                        default: this.selectedLang
+                    },
+                    field: 'Язык субтитров AI',
+                    onChange: function (value) {
+                        _this.selectedLang = value;
+                        Lampa.Storage.set('subtitles_sync_ai_lang', value);
+                        if (_this.recognition) _this.recognition.lang = value;
                     }
-                ]
-            });
+                });
+            }
 
             this.selectedLang = Lampa.Storage.get('subtitles_sync_ai_lang', this.selectedLang);
             if (this.recognition) this.recognition.lang = this.selectedLang;
@@ -116,121 +149,122 @@
         setupPlayer: function () {
             var _this = this;
 
-            if (Lampa.PlayerMenu) {
-                Lampa.PlayerMenu.add({
-                    title: 'AI Subtitles',
-                    subtitle: 'Генерация субтитров через AI',
+            if (Lampa.PlayerPanel) {
+                // Добавляем в панель плеера, если она доступна
+                Lampa.PlayerPanel.add({
+                    name: 'subtitles_ai',
+                    title: 'AI Субтитры',
+                    subtitle: 'Распознавание речи',
                     icon: 'subtitles',
-                    action: function () {
-                        _this.toggleSubtitles();
+                    onSelect: function() {
+                        _this.toggleRecognition();
                     }
                 });
             }
 
-            // Добавляем обработчик события на начало воспроизведения
-            Lampa.Listener.follow('player', function(e) {
-                if (e.type === 'start') {
-                    // Создаем элемент для субтитров, если он еще не создан
-                    _this.createSubtitleElement();
-                } else if (e.type === 'destroy') {
+            if (Lampa.PlayerMenu) {
+                // Добавляем в меню плеера
+                Lampa.PlayerMenu.add({
+                    title: 'AI Субтитры',
+                    subtitle: 'Генерация субтитров через AI',
+                    icon: 'subtitles',
+                    action: function () {
+                        _this.toggleRecognition();
+                    }
+                });
+            }
+
+            Lampa.Listener.follow('player', function (e) {
+                if (e.type == 'start') {
+                    _this.subtitles = [];
+                } else if (e.type == 'destroy') {
                     // Останавливаем распознавание при закрытии плеера
                     _this.stopRecognition();
                 }
             });
         },
 
-        createSubtitleElement: function() {
-            // Проверяем, существует ли уже элемент для субтитров
-            if (!this.subtitleElement) {
-                this.subtitleElement = document.createElement('div');
-                this.subtitleElement.className = 'ai-subtitles';
-                this.subtitleElement.style.cssText = 'position: absolute; bottom: 70px; left: 0; width: 100%; text-align: center; z-index: 9999; font-size: 24px; color: white; text-shadow: 0 0 3px black; padding: 10px; display: none;';
-                document.body.appendChild(this.subtitleElement);
-            }
-        },
-
-        toggleSubtitles: function() {
+        toggleRecognition: function() {
             if (this.active) {
                 this.stopRecognition();
-                Lampa.Noty.show('AI Субтитры отключены');
             } else {
                 this.startRecognition();
-                Lampa.Noty.show('AI Субтитры включены');
             }
         },
 
-        startRecognition: function() {
-            if (!this.recognition) return;
-            
+        startRecognition: function () {
+            if (!this.recognition) {
+                Lampa.Noty.show('Распознавание речи недоступно');
+                return;
+            }
+
             this.active = true;
             this.subtitles = [];
             
-            if (this.subtitleElement) {
-                this.subtitleElement.style.display = 'block';
-            }
-            
             try {
                 this.recognition.start();
+                Lampa.Noty.show('Начата генерация субтитров...');
             } catch (e) {
                 console.log('Ошибка при запуске распознавания', e);
+                Lampa.Noty.show('Ошибка запуска распознавания');
             }
         },
 
-        stopRecognition: function() {
+        stopRecognition: function () {
             if (!this.recognition) return;
             
             this.active = false;
             
-            if (this.subtitleElement) {
-                this.subtitleElement.style.display = 'none';
-                this.subtitleElement.textContent = '';
-            }
-            
             try {
                 this.recognition.stop();
+                Lampa.Noty.show('Генерация субтитров остановлена');
             } catch (e) {
                 console.log('Ошибка при остановке распознавания', e);
             }
         },
 
-        addSubtitle: function(text) {
+        addSubtitle: function (text) {
             if (!text || !this.active) return;
             
-            var currentTime = new Date().getTime();
+            var player = Lampa.Player;
+            if (!player) return;
             
-            this.subtitles.push({
-                text: text,
-                time: currentTime
-            });
+            var currentTime = player.current().time || 0;
             
-            // Ограничиваем количество хранимых субтитров
-            if (this.subtitles.length > 10) {
-                this.subtitles.shift();
+            // Создаем объект субтитра
+            var subtitle = {
+                start: currentTime,
+                end: currentTime + 3, // Длительность субтитра 3 секунды
+                text: text
+            };
+            
+            this.subtitles.push(subtitle);
+            
+            // Очищаем старые субтитры, если их больше 100
+            if (this.subtitles.length > 100) {
+                this.subtitles = this.subtitles.slice(-100);
             }
             
-            // Отображаем субтитры
-            this.showSubtitles();
-        },
-
-        showSubtitles: function() {
-            if (!this.subtitleElement || this.subtitles.length === 0) return;
-            
-            // Показываем последний субтитр
-            var latestSubtitle = this.subtitles[this.subtitles.length - 1];
-            this.subtitleElement.textContent = latestSubtitle.text;
-            
-            // Автоматически скрываем субтитры через 5 секунд
-            var _this = this;
-            setTimeout(function() {
-                if (_this.subtitles.length > 0 && _this.subtitles[_this.subtitles.length - 1] === latestSubtitle) {
-                    // Удаляем только если это все еще последний субтитр
-                    _this.subtitleElement.textContent = '';
+            // Добавляем в плеер
+            try {
+                player.subtitles.update({
+                    label: 'AI Subtitles (' + this.selectedLang.split('-')[0].toUpperCase() + ')',
+                    content: this.subtitles
+                });
+                
+                // Переключаемся на AI субтитры, если они еще не активны
+                if (!player.subtitles.selected() || player.subtitles.selected().label !== 'AI Subtitles (' + this.selectedLang.split('-')[0].toUpperCase() + ')') {
+                    player.subtitles.select('AI Subtitles (' + this.selectedLang.split('-')[0].toUpperCase() + ')');
                 }
-            }, 5000);
+            } catch (e) {
+                console.log('Ошибка при обновлении субтитров', e);
+            }
         }
     };
 
-    // Инициализация плагина
     SubtitlesSyncAI.init();
 
+    if (window.Lampa && window.Lampa.Plugins) {
+        window.Lampa.Plugins[SubtitlesSyncAI.name] = SubtitlesSyncAI;
+    }
 })();
