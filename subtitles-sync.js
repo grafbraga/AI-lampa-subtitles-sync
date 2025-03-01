@@ -1,8 +1,8 @@
 // ==LampaPlugin==
 // Name: Subtitles Sync AI
 // Description: Plugin for auto-generating subtitles using Web Speech API
-// Version: 1.1.2
-// Author: grafbraga
+// Version: 1.1.17
+// Author: grafbraga & Grok3-xAI
 // ==/LampaPlugin==
 
 (function () {
@@ -12,7 +12,7 @@
 
     var SubtitlesSyncAI = {
         name: 'SubtitlesSyncAI',
-        version: '1.1.2',
+        version: '1.1.17',
         recognition: null,
         subtitles: [],
         languages: ['en-US', 'ru-RU', 'es-ES', 'fr-FR', 'de-DE'],
@@ -59,23 +59,27 @@
         addSettings: function () {
             var _this = this;
 
-            Lampa.SettingsApi.addParam({
-                component: 'interface',
-                param: {
-                    name: 'subtitles_sync_ai_lang',
-                    type: 'select',
-                    values: this.languages.reduce(function (result, lang) {
-                        result[lang] = lang.split('-')[0].toUpperCase();
-                        return result;
-                    }, {}),
-                    default: this.selectedLang
-                },
-                field: 'Язык субтитров AI',
-                onChange: function (value) {
-                    _this.selectedLang = value;
-                    Lampa.Storage.set('subtitles_sync_ai_lang', value);
-                    if (_this.recognition) _this.recognition.lang = value;
-                }
+            console.log('Adding settings to root menu');
+            Lampa.Settings.add('subtitles_sync_ai', {
+                name: 'Subtitles Sync AI',
+                items: [
+                    {
+                        name: 'subtitles_sync_ai_lang',
+                        type: 'select',
+                        values: this.languages.reduce(function (result, lang) {
+                            result[lang] = lang.split('-')[0].toUpperCase();
+                            return result;
+                        }, {}),
+                        default: this.selectedLang,
+                        title: 'Subtitle Language',
+                        onChange: function (value) {
+                            _this.selectedLang = value;
+                            Lampa.Storage.set('subtitles_sync_ai_lang', value);
+                            if (_this.recognition) _this.recognition.lang = value;
+                            console.log('Language set to:', value);
+                        }
+                    }
+                ]
             });
 
             this.selectedLang = Lampa.Storage.get('subtitles_sync_ai_lang', this.selectedLang);
@@ -93,6 +97,24 @@
                         _this.startRecognition();
                     }
                 });
+
+                Lampa.PlayerMenu.add({
+                    title: 'AI Subtitles Settings',
+                    subtitle: 'Configure subtitles',
+                    icon: 'settings',
+                    action: function () {
+                        Lampa.Settings.show({
+                            category: 'subtitles_sync_ai',
+                            title: 'Subtitles Sync AI'
+                        });
+                        console.log('Opened AI Subtitles Settings in player menu');
+                    }
+                });
+
+                console.log('Player menu items added');
+            } else {
+                console.log('Error: Lampa.PlayerMenu unavailable');
+                Lampa.Noty.show('Error: PlayerMenu unavailable');
             }
 
             Lampa.Listener.follow('player', function (e) {
@@ -104,7 +126,8 @@
 
         startRecognition: function () {
             if (!this.recognition) {
-                Lampa.Noty.show('Распознавание речи недоступно');
+                console.log('Speech recognition unavailable');
+                Lampa.Noty.show('Speech recognition unavailable');
                 return;
             }
 
