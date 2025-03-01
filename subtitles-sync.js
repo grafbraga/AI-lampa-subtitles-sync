@@ -1,8 +1,8 @@
 // ==LampaPlugin==
 // Name: Subtitles Sync AI
 // Description: Plugin for auto-generating subtitles using Web Speech API
-// Version: 1.1.18
-// Author: grafbraga & Grok3-xAI
+// Version: 1.1.19
+// Author: grafbraga
 // ==/LampaPlugin==
 
 (function () {
@@ -15,7 +15,7 @@
 
     var SubtitlesSyncAI = {
         name: 'SubtitlesSyncAI',
-        version: '1.1.18',
+        version: '1.1.19',
         recognition: null,
         subtitles: [],
         languages: ['en-US', 'ru-RU', 'es-ES', 'fr-FR', 'de-DE'],
@@ -59,7 +59,7 @@
                 if (e.type === 'ready') {
                     setTimeout(function () {
                         console.log('[SubtitlesSyncAI] App ready, configuring plugin');
-                        if (Lampa.Noty) Lampa.Noty.show('Subtitles Sync AI v1.1.18 loaded');
+                        if (Lampa.Noty) Lampa.Noty.show('Subtitles Sync AI v1.1.19 loaded');
                         _this.addSettings();
                         _this.setupPlayer();
                     }, 500);
@@ -82,7 +82,7 @@
                             return result;
                         }, {}),
                         default: this.selectedLang,
-                        title: 'Subtitle Language',
+                        title: 'Язык субтитров AI',
                         onChange: function (value) {
                             _this.selectedLang = value;
                             Lampa.Storage.set('subtitles_sync_ai_lang', value);
@@ -94,7 +94,6 @@
             });
 
             this.selectedLang = Lampa.Storage.get('subtitles_sync_ai_lang', this.selectedLang);
-            console.log('[SubtitlesSyncAI] Settings added, selectedLang:', this.selectedLang);
         },
 
         setupPlayer: function () {
@@ -113,7 +112,7 @@
 
                 Lampa.PlayerMenu.add({
                     title: 'AI Subtitles Settings',
-                    subtitle: 'Configure subtitles',
+                    subtitle: 'Настройка субтитров',
                     icon: 'settings',
                     action: function () {
                         Lampa.Settings.show({
