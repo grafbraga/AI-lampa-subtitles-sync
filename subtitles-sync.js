@@ -9,6 +9,21 @@
         description: 'Плагин для автоматической загрузки субтитров'
     };
 
+    // Регистрация шаблона для настроек субтитров
+    Lampa.Template.add('settings_subtitles', `
+        <div class="settings-folder selector" data-component="subtitles">
+            <div class="settings-folder__icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2 5C2 4.44772 2.44772 4 3 4H21C21.5523 4 22 4.44772 22 5V19C22 19.5523 21.5523 20 21 20H3C2.44772 20 2 19.5523 2 19V5Z" stroke="currentColor" stroke-width="2"/>
+                    <line x1="5" y1="8" x2="19" y2="8" stroke="currentColor" stroke-width="2"/>
+                    <line x1="5" y1="12" x2="15" y2="12" stroke="currentColor" stroke-width="2"/>
+                    <line x1="5" y1="16" x2="17" y2="16" stroke="currentColor" stroke-width="2"/>
+                </svg>
+            </div>
+            <div class="settings-folder__name">Субтитры</div>
+        </div>
+    `);
+
     function SubtitlesPlugin() {
         const plugin = this;
         
@@ -17,7 +32,7 @@
             language: 'ru',
             autoload: true,
             fontSize: 16,
-            timeOffset: 0, // Исправлено название для смещения времени
+            timeOffset: 0,
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
             textColor: '#ffffff'
         };
@@ -79,20 +94,10 @@
             Lampa.Settings.listener.follow('open', function (e) {
                 if (e.name === 'main') {
                     setTimeout(function() {
-                        if (e.body.find('[data-component="subtitles"]').length === 0) {
-                            e.body.find('[data-component="more"]').after(
-                                '<div class="settings-folder selector" data-component="subtitles">'+
-                                    '<div class="settings-folder__icon">'+
-                                        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">'+
-                                            '<path d="M2 5C2 4.44772 2.44772 4 3 4H21C21.5523 4 22 4.44772 22 5V19C22 19.5523 21.5523 20 21 20H3C2.44772 20 2 19.5523 2 19V5Z" stroke="currentColor" stroke-width="2"/>'+
-                                            '<line x1="5" y1="8" x2="19" y2="8" stroke="currentColor" stroke-width="2"/>'+
-                                            '<line x1="5" y1="12" x2="15" y2="12" stroke="currentColor" stroke-width="2"/>'+
-                                            '<line x1="5" y1="16" x2="17" y2="16" stroke="currentColor" stroke-width="2"/>'+
-                                        '</svg>'+
-                                    '</div>'+
-                                    '<div class="settings-folder__name">Субтитры</div>'+
-                                '</div>'
-                            );
+                        const subtitlesFolder = e.body.find('[data-component="subtitles"]');
+                        if (!subtitlesFolder.length) {
+                            // Используем зарегистрированный шаблон
+                            e.body.find('[data-component="more"]').after(Lampa.Template.get('settings_subtitles'));
                         }
                     }, 10);
                 }
