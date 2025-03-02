@@ -1,133 +1,88 @@
-(function () {
-    'use strict';
+(function() {
+    // Проверяем поддержку SpeechRecognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
 
-    // Описание плагина
-    var plugin = {
-        url: 'https://yourusername.github.io/subtitles.js', // Замените на ваш GitHub Pages URL
-        status: 1,
-        name: 'Simple Subtitles',
-        author: 'Grok 3 @ xAI'
-    };
+    let recognition = null;
+    let videoElement = null;
+    let textTrack = null;
+    let lastCueEnd = 0;
 
-    // Элемент меню настроек
-    var menu_item = {
-        title: 'Subtitles',
-        subtitle: 'Enable real-time subtitles',
-        icon: 'closed_caption',
-        on: false,
-        action: function () {
-            this.on = !this.on;
-            toggleSubtitles(this.on);
-            Lampa.Storage.set('subtitles_enabled', this.on);
-            Lampa.Settings.update();
-        }
-    };
-
-    // Интеграция в корневое меню настроек
-    Lampa.Settings.main().after(function () {
-        var params = Lampa.Settings.main().params;
-        menu_item.on = Lampa.Storage.get('subtitles_enabled', false);
-        params.menu.push(menu_item);
-    });
-
-    // Глобальные переменные
-    var recognition;
-    var subtitles_container;
-
-    // Переключение субтитров
-    function toggleSubtitles(enabled) {
-        if (enabled) {
-            startSubtitles();
-        } else {
-            stopSubtitles();
-        }
-    }
-
-    // Запуск субтитров
-    function startSubtitles() {
-        // Проверка поддержки Web Speech API
-        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            Lampa.Noty.show('Web Speech API not supported on this device.');
-            menu_item.on = false;
-            Lampa.Settings.update();
-            return;
-        }
-
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US'; // Можно добавить выбор языка в будущем
-
-        // Создание контейнера для субтитров
-        subtitles_container = document.createElement('div');
-        subtitles_container.style.position = 'absolute';
-        subtitles_container.style.bottom = '10%';
-        subtitles_container.style.left = '0';
-        subtitles_container.style.right = '0';
-        subtitles_container.style.textAlign = 'center';
-        subtitles_container.style.color = 'white';
-        subtitles_container.style.background = 'rgba(0, 0, 0, 0.7)';
-        subtitles_container.style.padding = '10px';
-        subtitles_container.style.fontSize = '18px';
-        subtitles_container.style.zIndex = '1000';
-        document.body.appendChild(subtitles_container);
-
-        // Обработка результатов распознавания
-        recognition.onresult = function (event) {
-            var transcript = '';
-            for (var i = event.resultIndex; i < event.results.length; i++) {
-                transcript += event.results[i][0].transcript;
-            }
-            updateSubtitles(transcript);
-        };
-
-        // Обработка ошибок
-        recognition.onerror = function (event) {
-            Lampa.Noty.show('Subtitles error: ' + event.error);
-        };
-
-        // Синхронизация с плеером
-        Lampa.Player.listeners.push({
-            update: function (player) {
-                if (subtitles_container) {
-                    subtitles_container.dataset.time = player.currentTime;
+    const SubtitlePlugin = {
+        init() {
+            // Добавляем переключатель в настройки
+            Lampa.Settings.addParam({
+                component: 'main',
+                param: {
+                    name: 'ai_subtitles',
+                    type: 'toggle',
+                    title: 'AI Субтитры'
                 }
+            });
+
+            // Следим за запуском видео
+            Lampa.Listener.follow('app', (e) => {
+                if (e.name === 'video') this.onVideoStart();
+                if (e.name === 'video_destroy') this.onVideoStop();
+            });
+        },
+
+        onVideoStart() {
+            videoElement = document.querySelector('video');
+            if (!videoElement) return;
+
+            // Создаем текстовую дорожку
+            textTrack = videoElement.addTextTrack('subtitles', 'AI Subtitles', 'en');
+            textTrack.mode = 'showing';
+
+            // Запускаем распознавание при включенной опции
+            if (Lampa.Settings.get('ai_subtitles')) {
+                this.startRecognition();
             }
-        });
+        },
 
-        recognition.start();
-        Lampa.Noty.show('Subtitles enabled');
-    }
+        startRecognition() {
+            if (!videoElement) return;
 
-    // Остановка субтитров
-    function stopSubtitles() {
-        if (recognition) {
-            recognition.stop();
-            recognition = null;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = Lampa.Storage.get('language', 'en') === 'ru' ? 'ru-RU' : 'en-US';
+
+            recognition.onresult = (e) => {
+                const results = e.results;
+                const currentTime = videoElement.currentTime;
+                
+                for (let i = e.resultIndex; i < results.length; i++) {
+                    const transcript = results[i][0].transcript.trim();
+                    if (transcript && results[i].isFinal) {
+                        const cue = new VTTCue(
+                            lastCueEnd > currentTime ? lastCueEnd : currentTime,
+                            currentTime + 5, // Фиксированная длительность субтитра
+                            transcript
+                        );
+                        
+                        textTrack.addCue(cue);
+                        lastCueEnd = cue.endTime;
+                    }
+                }
+            };
+
+            recognition.start();
+        },
+
+        onVideoStop() {
+            if (recognition) {
+                recognition.stop();
+                recognition = null;
+            }
+            videoElement = null;
+            textTrack = null;
+            lastCueEnd = 0;
         }
-        if (subtitles_container) {
-            subtitles_container.remove();
-            subtitles_container = null;
-        }
-        Lampa.Noty.show('Subtitles disabled');
-    }
+    };
 
-    // Обновление субтитров
-    function updateSubtitles(text) {
-        if (subtitles_container) {
-            var time = subtitles_container.dataset.time || 0;
-            subtitles_container.innerText = `[${formatTime(time)}] ${text}`;
-        }
-    }
-
-    // Форматирование времени
-    function formatTime(seconds) {
-        var minutes = Math.floor(seconds / 60);
-        var secs = Math.floor(seconds % 60);
-        return `${minutes}:${secs < 10 ? '0' + secs : secs}`;
-    }
-
-    // Регистрация плагина
-    Lampa.Plugin.register(plugin);
+    // Инициализация плагина
+    Lampa.Plugin.register('ai_subtitles', SubtitlePlugin);
+    Lampa.Plugin.start('ai_subtitles');
 })();
