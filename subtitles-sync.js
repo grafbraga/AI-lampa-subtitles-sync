@@ -2,15 +2,18 @@
 (function () {
     // Включаем строгий режим для предотвращения распространенных ошибок
     'use strict';
-Lampa.Platform.tv(); 
-function add() {
-	var a = 's'; 
-	function updateT() {
-		//var element = $(".view--torrent"); 
-        // Проверяем, был ли плагин уже инициализирован
-        if (window.subtitlesPluginInitialized) return;
-        // Устанавливаем флаг, что плагин инициализирован, чтобы избежать повторной загрузки
-        window.subtitlesPluginInitialized = true;
+
+    // Проверяем, был ли плагин уже инициализирован
+    if (window.subtitlesPluginInitialized) return;
+    // Устанавливаем флаг, что плагин инициализирован, чтобы избежать повторной загрузки
+    console.log('[Subtitles] Плагин загружается...');
+    if (window.subtitlesPluginInitialized) {
+   	console.log('[Subtitles] Плагин уже инициализирован, пропускаем');
+    return;
+    }
+    window.subtitlesPluginInitialized = true;
+    console.log('[Subtitles] Плагин успешно инициализирован');
+    // Основной код плагина
 
     // Убеждаемся, что объект настроек Lampa существует, или создаем пустой объект
     window.lampa_settings = window.lampa_settings || {};
@@ -39,6 +42,8 @@ function add() {
 
     // Задерживаем выполнение основного кода плагина на 500 мс, чтобы Lampa успела загрузиться
     setTimeout(function() {
+    // Основной код плагина
+    }, 500);
         // Определяем конструктор плагина субтитров
         function SubtitlesPlugin() {
             const plugin = this; // Сохраняем ссылку на текущий объект плагина
@@ -46,10 +51,10 @@ function add() {
             // Задаем начальные настройки субтитров
             this.settings = {
                 enabled: false, // Субтитры отключены по умолчанию
-                language: 'ru', // Язык субтитров по умолчанию - русский
+                language: 'en', // Язык субтитров по умолчанию - русский
                 autoload: true, // Автозагрузка субтитров включена
                 fontSize: 16, // Размер шрифта субтитров по умолчанию
-                timeOffset: 0, // Смещение времени субтитров (в секундах)
+                timeOffset: 1, // Смещение времени субтитров (в секундах)
                 backgroundColor: 'rgba(0, 0, 0, 0.5)', // Цвет фона субтитров
                 textColor: '#ffffff' // Цвет текста субтитров
             };
