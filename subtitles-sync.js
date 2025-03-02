@@ -1,6 +1,10 @@
 (function () {
     'use strict';
 
+    // Предотвращение множественной загрузки плагина
+    if (window.subtitlesPluginInitialized) return;
+    window.subtitlesPluginInitialized = true;
+
     // Регистрация плагина в системе Lampa
     window.lampa_settings = window.lampa_settings || {};
     window.lampa_settings.subtitles = {
@@ -55,13 +59,17 @@
             };
 
             this.init = function () {
-                this.loadSettings();
-                this.createStyles();
-                this.registerSettings();
-                this.injectSubtitleContainer();
-                this.addEventListeners();
-                Lampa.Plugins.add('subtitles', this);
-                console.log('[Subtitles] Plugin initialized');
+                try {
+                    this.loadSettings();
+                    this.createStyles();
+                    this.registerSettings();
+                    this.injectSubtitleContainer();
+                    this.addEventListeners();
+                    Lampa.Plugins.add('subtitles', this);
+                    console.log('[Subtitles] Plugin initialized');
+                } catch (error) {
+                    console.error('[Subtitles] Error during initialization:', error);
+                }
             };
 
             this.createStyles = function () {
@@ -87,12 +95,19 @@
                         border-radius: 4px;
                         text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.8);
                     }
+                    .subtitles-settings-container {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 10px; /* Отступ между элементами настроек */
+                    }
                 `;
                 document.head.appendChild(style);
             };
 
             this.registerSettings = function () {
+                console.log('[Subtitles] Регистрация настроек');
                 Lampa.Settings.listener.follow('open', function (e) {
+                    console.log('[Subtitles] Открыты настройки:', e.name);
                     if (e.name === 'main') {
                         setTimeout(function() {
                             const subtitlesFolder = e.body.find('[data-component="subtitles"]');
@@ -103,6 +118,7 @@
                     }
 
                     if (e.name === 'subtitles') {
+                        console.log('[Subtitles] Создание настроек субтитров');
                         plugin.createSubtitlesSettings(e);
                     }
                 });
@@ -111,34 +127,41 @@
             };
 
             this.createSubtitlesSettings = function (e) {
-                e.body.empty();
-                const settings = [
-                    { title: 'Enable Subtitles', type: 'toggle', value: this.settings.enabled, onChange: (v) => { this.settings.enabled = v; this.saveSettings(); if (!v) this.hideSubtitles(); else if (this.currentMedia) this.searchSubtitles(this.currentMedia); } },
-                    { title: 'Subtitles Language', type: 'select', values: { ru: 'Russian', en: 'English', th: 'Thai' }, value: this.settings.language, onChange: (v) => { this.settings.language = v; this.saveSettings(); if (this.currentMedia && this.settings.enabled) this.searchSubtitles(this.currentMedia); } },
-                    { title: 'Font Size', type: 'select', values: { 12: 'Small', 16: 'Medium', 20: 'Large', 24: 'Extra Large' }, value: this.settings.fontSize.toString(), onChange: (v) => { this.settings.fontSize = parseInt(v); this.saveSettings(); this.updateStyles(); } },
-                    { title: 'Text Color', type: 'select', values: { '#ffffff': 'White', '#ffff00': 'Yellow', '#00ff00': 'Green', '#ff0000': 'Red' }, value: this.settings.textColor, onChange: (v) => { this.settings.textColor = v; this.saveSettings(); this.updateStyles(); } },
-                    { title: 'Synchronization Offset (sec)', type: 'select', values: { '-5': '-5', '-2': '-2', '0': '0', '2': '2', '5': '5' }, value: this.settings.timeOffset.toString(), onChange: (v) => { this.settings.timeOffset = parseInt(v); this.saveSettings(); } }
-                ];
-                settings.forEach(setting => {
-                    const item = $('<div class="settings-param"><div class="settings-param__name">' + setting.title + '</div><div class="settings-param__value"></div></div>');
-                    const field = item.find('.settings-param__value');
-                    if (setting.type === 'toggle') {
-                        const toggle = $('<div class="settings-param__toggle selector ' + (setting.value ? 'active' : '') + '"><div class="settings-param__toggle-handle"></div></div>');
-                        toggle.on('click', () => { toggle.toggleClass('active'); setting.onChange(toggle.hasClass('active')); });
-                        field.append(toggle);
-                    } else if (setting.type === 'select') {
-                        const select = $('<div class="settings-param__select selector">' + setting.values[setting.value] + '</div>');
-                        select.on('click', () => {
-                            Lampa.Select.show({
-                                title: setting.title,
-                                items: Object.keys(setting.values).map(k => ({ title: setting.values[k], value: k, selected: k === setting.value })),
-                                onSelect: (v) => { select.text(setting.values[v.value]); setting.onChange(v.value); }
+                try {
+                    if (e.body.find('.subtitles-settings-container').length) return; // Предотвращение повторного добавления
+                    e.body.empty();
+                    const settingsContainer = $('<div class="subtitles-settings-container"></div>');
+                    const settings = [
+                        { title: 'Enable Subtitles', type: 'toggle', value: this.settings.enabled, onChange: (v) => { this.settings.enabled = v; this.saveSettings(); if (!v) this.hideSubtitles(); else if (this.currentMedia) this.searchSubtitles(this.currentMedia); } },
+                        { title: 'Subtitles Language', type: 'select', values: { ru: 'Russian', en: 'English', th: 'Thai' }, value: this.settings.language, onChange: (v) => { this.settings.language = v; this.saveSettings(); if (this.currentMedia && this.settings.enabled) this.searchSubtitles(this.currentMedia); } },
+                        { title: 'Font Size', type: 'select', values: { 12: 'Small', 16: 'Medium', 20: 'Large', 24: 'Extra Large' }, value: this.settings.fontSize.toString(), onChange: (v) => { this.settings.fontSize = parseInt(v); this.saveSettings(); this.updateStyles(); } },
+                        { title: 'Text Color', type: 'select', values: { '#ffffff': 'White', '#ffff00': 'Yellow', '#00ff00': 'Green', '#ff0000': 'Red' }, value: this.settings.textColor, onChange: (v) => { this.settings.textColor = v; this.saveSettings(); this.updateStyles(); } },
+                        { title: 'Synchronization Offset (sec)', type: 'select', values: { '-5': '-5', '-2': '-2', '0': '0', '2': '2', '5': '5' }, value: this.settings.timeOffset.toString(), onChange: (v) => { this.settings.timeOffset = parseInt(v); this.saveSettings(); } }
+                    ];
+                    settings.forEach(setting => {
+                        const item = $('<div class="settings-param"><div class="settings-param__name">' + setting.title + '</div><div class="settings-param__value"></div></div>');
+                        const field = item.find('.settings-param__value');
+                        if (setting.type === 'toggle') {
+                            const toggle = $('<div class="settings-param__toggle selector ' + (setting.value ? 'active' : '') + '"><div class="settings-param__toggle-handle"></div></div>');
+                            toggle.on('click', () => { toggle.toggleClass('active'); setting.onChange(toggle.hasClass('active')); });
+                            field.append(toggle);
+                        } else if (setting.type === 'select') {
+                            const select = $('<div class="settings-param__select selector">' + setting.values[setting.value] + '</div>');
+                            select.on('click', () => {
+                                Lampa.Select.show({
+                                    title: setting.title,
+                                    items: Object.keys(setting.values).map(k => ({ title: setting.values[k], value: k, selected: k === setting.value })),
+                                    onSelect: (v) => { select.text(setting.values[v.value]); setting.onChange(v.value); }
+                                });
                             });
-                        });
-                        field.append(select);
-                    }
-                    e.body.append(item);
-                });
+                            field.append(select);
+                        }
+                        settingsContainer.append(item);
+                    });
+                    e.body.append(settingsContainer);
+                } catch (error) {
+                    console.error('[Subtitles] Ошибка в createSubtitlesSettings:', error);
+                }
             };
 
             this.addPlayerControls = function() {
