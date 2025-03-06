@@ -1,103 +1,88 @@
-// subtitle_plugin.js
-(function() {
-    var plugin = {
-        name: 'Subtitle Plugin',
-        version: '1.0.0',
-        description: 'Автоматически добавляет субтитры к видео',
-        author: 'Ваше имя',
-        settings: {
-            enabled: true
-        },
+// plugin.js
 
-        // Инициализация плагина
-        init: function() {
-            // Добавление пункта меню "Настройки субтитров" в корень настроек
-            Lampa.Menu.add('settings', {
-                title: 'Настройки субтитров',
-                icon: 'subtitles',
-                action: function() {
-                    Lampa.Menu.open('subtitle_settings');
+// Задержка загрузки плагина на 500 мс
+setTimeout(() => {
+    const apiKey = 'D7hLVYcZiZTx9st15DTlarZdI2qP4NG5';
+
+    // Функция включения субтитров
+    function enableSubtitles() {
+        Lampa.Player.on('play', async (video) => {
+            try {
+                // Предполагается, что у видео есть свойство title
+                const title = video.title || Lampa.Player.current().title;
+                if (!title) {
+                    console.error('Название видео не найдено');
+                    return;
                 }
-            });
 
-            // Определение страницы настроек субтитров
-            Lampa.Menu.add('subtitle_settings', {
-                title: 'Настройки субтитров',
-                items: [
-                    {
-                        title: 'Включить субтитры автоматически',
-                        type: 'toggle',
-                        value: function() {
-                            return Lampa.Storage.get('subtitles_enabled', true);
-                        },
-                        action: function(value) {
-                            Lampa.Storage.set('subtitles_enabled', value);
-                            if (!value) {
-                                // Отключение субтитров в плеере, если выключено
-                                Lampa.Player.removeSubtitle();
-                            }
-                        }
+                // Поиск субтитров
+                const subtitles = await searchSubtitles(title);
+                if (subtitles && subtitles.length > 0) {
+                    // Загрузка первого подходящего субтитра
+                    const subtitleUrl = await downloadSubtitle(subtitles[0].id);
+                    if (subtitleUrl) {
+                        // Установка субтитров в плеер
+                        Lampa.Player.setSubtitle(subtitleUrl);
+                        console.log('Субтитры загружены:', subtitleUrl);
                     }
-                ]
-            });
-
-            // Подписка на событие начала воспроизведения видео
-            Lampa.Player.on('play', function() {
-                if (Lampa.Storage.get('subtitles_enabled', true)) {
-                    plugin.loadSubtitles();
-                }
-            });
-
-            // Подписка на событие остановки видео для очистки субтитров
-            Lampa.Player.on('stop', function() {
-                Lampa.Player.removeSubtitle();
-            });
-        },
-
-        // Функция загрузки субтитров
-        loadSubtitles: function() {
-            var video = Lampa.Player.currentVideo;
-            if (!video) {
-                console.log('Видео не найдено');
-                return;
-            }
-
-            // Получение названия видео для поиска
-            var title = video.title || video.name;
-            if (!title) {
-                console.log('Название видео отсутствует');
-                return;
-            }
-
-            // Параметры OpenSubtitles API
-            var apiKey = 'D7hLVYcZiZTx9st15DTlarZdI2qP4NG5';
-            var searchUrl = 'https://api.opensubtitles.com/api/v1/subtitles?query=' + encodeURIComponent(title) + '&languages=ru,en';
-
-            // Выполнение запроса через API Lampa для обхода CORS
-            Lampa.Network.get(searchUrl, {
-                headers: {
-                    'Api-Key': apiKey,
-                    'User-Agent': 'LampaTV v1.0'
-                }
-            }).then(function(response) {
-                var data = JSON.parse(response);
-                if (data.data && data.data.length > 0) {
-                    // Выбор первого подходящего субтитра
-                    var subtitle = data.data[0];
-                    var downloadUrl = subtitle.attributes.files[0].file_url;
-
-                    // Загрузка субтитров в плеер
-                    Lampa.Player.addSubtitle(downloadUrl);
-                    console.log('Субтитры загружены для: ' + title);
                 } else {
-                    console.log('Субтитры не найдены для: ' + title);
+                    console.log('Субтитры не найдены для:', title);
                 }
-            }).catch(function(error) {
+            } catch (error) {
                 console.error('Ошибка при загрузке субтитров:', error);
-            });
-        }
-    };
+            }
+        });
+    }
 
-    // Регистрация плагина в Lampa
-    Lampa.Plugin.register(plugin);
-})();
+    // Функция отключения субтитров
+    function disableSubtitles() {
+        Lampa.Player.setSubtitle(null); // Предполагаемый метод для отключения
+        Lampa.Player.off('play'); // Отключаем слушатель событий
+    }
+
+    // Поиск субтитров через OpenSubtitles API
+    async function searchSubtitles(title) {
+        const url = `https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(title)}`;
+        const response = await fetch(url, {
+            headers: {
+                'Api-Key': apiKey,
+                'Content-Type': 'application/json'
+            }
+        });
+        if (!response.ok) throw new Error('Ошибка поиска субтитров');
+        const data = await response.json();
+        return data.data; // Возвращает массив субтитров
+    }
+
+    // Загрузка субтитров по ID
+    async function downloadSubtitle(subtitleId) {
+        const url = `https://api.opensubtitles.com/api/v1/download`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Api-Key': apiKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ file_id: subtitleId })
+        });
+        if (!response.ok) throw new Error('Ошибка загрузки субтитров');
+        const data = await response.json();
+        return data.link; // Прямая ссылка на файл субтитров
+    }
+
+    // Добавление пункта в меню настроек
+    Lampa.Settings.add('subtitles', {
+        name: 'Настройки субтитров',
+        type: 'toggle',
+        default: false,
+        onChange: (enabled) => {
+            if (enabled) {
+                enableSubtitles();
+            } else {
+                disableSubtitles();
+            }
+        }
+    });
+
+    console.log('Плагин субтитров загружен');
+}, 500);
