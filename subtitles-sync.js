@@ -1,88 +1,98 @@
-// plugin.js
-
-// Задержка загрузки плагина на 500 мс
-setTimeout(() => {
-    const apiKey = 'D7hLVYcZiZTx9st15DTlarZdI2qP4NG5';
-
-    // Функция включения субтитров
-    function enableSubtitles() {
-        Lampa.Player.on('play', async (video) => {
-            try {
-                // Предполагается, что у видео есть свойство title
-                const title = video.title || Lampa.Player.current().title;
-                if (!title) {
-                    console.error('Название видео не найдено');
-                    return;
+(function() {
+    "use strict";
+    // Задержка инициализации плагина на 500 мс
+    setTimeout(function() {
+        // Проверка наличия объекта Lampa и его настроек
+        if(window.lampa && window.lampa.settings && typeof window.lampa.settings.add === 'function'){
+            // Добавляем новый пункт в корневое меню настроек Lampa
+            window.lampa.settings.add('subtitle_settings', {
+                title: 'Настройки субтитров',
+                // Иконку можно задать по необходимости
+                icon: 'subtitles',
+                // Обработчик клика – переключение субтитров
+                handler: function(){
+                    toggleSubtitles();
                 }
+            });
+        } else {
+            console.warn('Не удалось найти настройки Lampa TV для добавления плагина субтитров.');
+        }
 
-                // Поиск субтитров
-                const subtitles = await searchSubtitles(title);
-                if (subtitles && subtitles.length > 0) {
-                    // Загрузка первого подходящего субтитра
-                    const subtitleUrl = await downloadSubtitle(subtitles[0].id);
-                    if (subtitleUrl) {
-                        // Установка субтитров в плеер
-                        Lampa.Player.setSubtitle(subtitleUrl);
-                        console.log('Субтитры загружены:', subtitleUrl);
-                    }
-                } else {
-                    console.log('Субтитры не найдены для:', title);
-                }
-            } catch (error) {
-                console.error('Ошибка при загрузке субтитров:', error);
+        // Добавляем обработчик клавиатуры для быстрого включения/выключения (нажатием S или s)
+        document.addEventListener('keydown', function(e) {
+            if(e.key === 's' || e.key === 'S'){
+                toggleSubtitles();
             }
         });
-    }
 
-    // Функция отключения субтитров
-    function disableSubtitles() {
-        Lampa.Player.setSubtitle(null); // Предполагаемый метод для отключения
-        Lampa.Player.off('play'); // Отключаем слушатель событий
-    }
+        // Создаём элемент для отображения субтитров (оверлей)
+        var subtitleDiv = document.createElement('div');
+        subtitleDiv.style.position = 'absolute';
+        subtitleDiv.style.bottom = '10%';
+        subtitleDiv.style.width = '100%';
+        subtitleDiv.style.textAlign = 'center';
+        subtitleDiv.style.color = '#FFF';
+        subtitleDiv.style.textShadow = '2px 2px 4px #000';
+        subtitleDiv.style.fontSize = '20px';
+        subtitleDiv.style.zIndex = '9999';
+        subtitleDiv.style.pointerEvents = 'none';
+        subtitleDiv.style.display = 'none';
+        document.body.appendChild(subtitleDiv);
 
-    // Поиск субтитров через OpenSubtitles API
-    async function searchSubtitles(title) {
-        const url = `https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(title)}`;
-        const response = await fetch(url, {
-            headers: {
-                'Api-Key': apiKey,
-                'Content-Type': 'application/json'
-            }
-        });
-        if (!response.ok) throw new Error('Ошибка поиска субтитров');
-        const data = await response.json();
-        return data.data; // Возвращает массив субтитров
-    }
+        // Флаг состояния субтитров и идентификатор интервала для синхронизации
+        var subtitlesEnabled = false;
+        var subtitleInterval = null;
 
-    // Загрузка субтитров по ID
-    async function downloadSubtitle(subtitleId) {
-        const url = `https://api.opensubtitles.com/api/v1/download`;
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Api-Key': apiKey,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ file_id: subtitleId })
-        });
-        if (!response.ok) throw new Error('Ошибка загрузки субтитров');
-        const data = await response.json();
-        return data.link; // Прямая ссылка на файл субтитров
-    }
+        // Пример набора субтитров (в формате: время начала, конца и текст)
+        var subtitles = [
+            { start: 0,  end: 5,  text: "Привет, это тест субтитры." },
+            { start: 5,  end: 10, text: "Смотрите Lampa TV." },
+            { start: 10, end: 15, text: "Наслаждайтесь просмотром!" }
+        ];
 
-    // Добавление пункта в меню настроек
-    Lampa.Settings.add('subtitles', {
-        name: 'Настройки субтитров',
-        type: 'toggle',
-        default: false,
-        onChange: (enabled) => {
-            if (enabled) {
-                enableSubtitles();
+        // Функция переключения субтитров
+        function toggleSubtitles() {
+            subtitlesEnabled = !subtitlesEnabled;
+            if(subtitlesEnabled){
+                subtitleDiv.style.display = 'block';
+                startSubtitleSync();
             } else {
-                disableSubtitles();
+                subtitleDiv.style.display = 'none';
+                stopSubtitleSync();
             }
         }
-    });
 
-    console.log('Плагин субтитров загружен');
-}, 500);
+        // Функция запуска синхронизации субтитров с видео
+        function startSubtitleSync() {
+            // Поиск элемента видео на странице
+            var video = document.querySelector('video');
+            if(!video){
+                console.warn('Видео не найдено на странице.');
+                return;
+            }
+            // Интервал проверки текущего времени видео каждые 200 мс
+            subtitleInterval = setInterval(function(){
+                var currentTime = video.currentTime;
+                // Поиск субтитра, подходящего под текущее время
+                var currentSubtitle = subtitles.find(function(item){
+                    return currentTime >= item.start && currentTime <= item.end;
+                });
+                subtitleDiv.innerText = currentSubtitle ? currentSubtitle.text : '';
+            }, 200);
+        }
+
+        // Функция остановки синхронизации субтитров
+        function stopSubtitleSync() {
+            if(subtitleInterval){
+                clearInterval(subtitleInterval);
+                subtitleInterval = null;
+            }
+        }
+
+        // Здесь можно добавить дополнительную логику:
+        // • Автоматическую подгрузку субтитров из открытых баз (с учётом CORS и ограничений API)
+        // • Использование Web Speech API для генерации субтитров в реальном времени
+        // Однако в рамках автономной работы и без серверных обращений данный пример использует встроенные субтитры.
+
+    }, 500); // задержка 500 мс для загрузки плагина
+})();
